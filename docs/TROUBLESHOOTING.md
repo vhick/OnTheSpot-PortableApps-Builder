@@ -35,3 +35,9 @@ Strict icon checks found no verified upstream logo. The staging workflow instead
 ### ICON TEST SHORT-PATH ALIAS (b1r4)
 
 If icon tests report `C:/Users/runneradmin/...` versus `C:/Users/RUNNER~1/...`, both may refer to the same file. Do not modify icon selection or suppress the tests. Ensure the b1r4 assertion uses `Path.samefile()` and rerun on `windows-2022`. The updated test checks underlying file identity and still rejects wrong/missing files.
+
+## b1r5: official NSIS compiler cannot open a deep Python runtime file
+
+If the error contains `File: failed opening file` under `App/OnTheSpot/runtime/Lib/site-packages/...` when using `official`, the installer compilation directory was too deep for this NSIS toolchain. Use b1r5 or newer. The workflow deliberately builds the installer under a short, unique temporary drive-root directory, then checks the generated installer and copies the validated outputs to `build/installers`. Do not remove Python packages, SBOMs, or license metadata; do not enable Windows long paths globally or change system registry keys. If b1r5 fails, preserve the new log to distinguish a genuine missing file from any remaining path limitation.
+
+If installer-only rebuild is desired after a test build whose app ZIP passed but installer failed, enter that original **Build** run ID in **Rebuild OnTheSpot Installer Only** and select your engine; the failure-specific artifact includes ZIP plus SHA256SUMS. It contains no installer and is not a fully validated distribution release. The installer-only workflow verifies the ZIP and rebuilds just the installer.

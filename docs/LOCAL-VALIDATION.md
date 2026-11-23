@@ -32,3 +32,16 @@
 - Run all 32 tests locally, compile Python sources, parse workflows, validate final archive and source checksums. Windows tests still pending.
 
 - Additional workflow consistency fix: published build releases now include the ZIP checksum manifest required by the existing installer-only source recovery; verified with regression coverage. No shared publisher logic was duplicated.
+
+## b1r5 evidence from actual Windows b1r4 run
+- `logs_122336351531.zip`: OnTheSpot v2.0.5 Python runtime and React successfully built, static ZIP SHA-256 `bee1a517fd909039c0de0d8a8d26117cc5b3f257129be240b941cd13d9eb6460`, Windows launcher smoke test passed (HTTP 200).
+- Failure selected `official` engine in shared source-based 3.9.24 pipeline. NSIS reported `File: failed opening file ..\..\App\OnTheSpot\runtime\Lib\site-packages\cryptography-50.0.2.dist-info\sboms\cryptography-rust.cyclonedx.json` under deep checkout build output.
+- Shared action `action.yml` permits absolute `output-dir`; `scripts/build.ps1` places `/_upb_work/official` under it; `scripts/build-official.ps1` copies staging to `/isolated-source/<app>` and calls the authentic NSIS compiler. Root of runner temporary drive used as shallow build directory in b1r5.
+- Confirm b1r5 local unit tests, YAML parsing, source file checksum list and ZIP archive integrity before uploading; official Windows execution and installer installation are *not yet tested* for b1r5.
+
+### b1r5 local regression (23 November 2026)
+- `python -m unittest discover -s tests -v`: **37 tests passed** (32 earlier tests plus five new installer-path/output safety tests).
+- `python -m compileall -q scripts tests`: passed.
+- Parsed all three GitHub Actions workflows as YAML, confirmed shared compiler calls receive the short absolute directory emitted by `shortpath`, and verified verified-output copying occurs after installer validation.
+- Generated and verified `SOURCE-MANIFEST.sha256` and the source ZIP CRC checks.
+- No new Windows Actions run was performed for **b1r5**. Success of `official` NSIS compilation, actual installer launch, reinstallation, upgrade and rollback remain unverified.

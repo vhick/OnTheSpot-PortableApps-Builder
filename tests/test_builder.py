@@ -308,3 +308,85 @@ class ProductionReleaseProbeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class InstallerWorkspaceRegressionTests(unittest.TestCase):
+    """Protect short-path compilation and fail-closed copying of verified outputs."""
+
+    def setUp(self):
+        import collect_installer
+        self.collector = collect_installer
+
+    def fake_installer(self, source_dir, engine='official'):
+        import hashlib
+        root=Path(source_dir)
+        root.mkdir(parents=True,exist_ok=True)
+        src=root/'OnTheSpotPortable_2.0.5.0_official-b1r5.paf.exe'
+        src.write_bytes(b'fake fixture bytes only - not a real installer')
+        digest=hashlib.sha256(src.read_bytes()).hexdigest()
+        Path(str(src)+'.sha256').write_text(digest+'  '+src.name+'\n',encoding='ascii')
+        Path(str(src)+'.json').write_text(json.dumps({
+            'file':str(src),'sha256':digest,'engine':engine,
+            'app_id':'OnTheSpotPortable','version':'2.0.5.0'}),encoding='utf-8')
+        return src
+
+    def test_correct_shared_action_file_and_sidecars_are_mirrored(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            src=self.fake_installer(root/'short-compiler')
+            before=src.read_bytes()
+            output=self.collector.collect(src,root/'builder-output')
+            self.assertEqual(output.read_bytes(),before)
+            self.assertEqual(Path(str(output)+'.sha256').read_bytes(),Path(str(src)+'.sha256').read_bytes())
+            meta=json.loads(Path(str(output)+'.json').read_text())
+            self.assertEqual(meta['compiler_output_path'],str(src))
+            self.assertEqual(meta['file'],str(output))
+            self.assertEqual(meta['engine'],'official')
+            self.assertTrue(src.is_file(), 'Never remove source compiler outputs')
+
+    def test_sidecar_checksum_mismatch_fails_without_publishing(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            src=self.fake_installer(root/'short-compiler')
+            Path(str(src)+'.sha256').write_text('0'*64+'  '+src.name+'\n')
+            with self.assertRaisesRegex(RuntimeError,'INSTALLER_SHA256_SIDECAR_MISMATCH'):
+                self.collector.collect(src,root/'builder-output')
+            self.assertFalse((root/'builder-output'/src.name).exists())
+
+    def test_mismatched_metadata_fails_without_publishing(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            src=self.fake_installer(root/'short-compiler')
+            p=Path(str(src)+'.json')
+            meta=json.loads(p.read_text());meta['app_id']='AnotherApp';p.write_text(json.dumps(meta))
+            with self.assertRaisesRegex(RuntimeError,'INSTALLER_APP_ID_MISMATCH'):
+                self.collector.collect(src,root/'builder-output')
+            self.assertFalse((root/'builder-output'/src.name).exists())
+
+    def test_collector_refuses_existing_target_and_preserves_source_and_target(self):
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            src=self.fake_installer(root/'short-compiler')
+            out=root/'builder-output';out.mkdir()
+            (out/src.name).write_bytes(b'owner data fixture - must survive')
+            with self.assertRaisesRegex(RuntimeError,'INSTALLER_MIRROR_REFUSES_OVERWRITE'):
+                self.collector.collect(src,out)
+            self.assertEqual((out/src.name).read_bytes(),b'owner data fixture - must survive')
+            self.assertTrue(src.is_file())
+
+    def test_workflows_use_shared_action_with_shallow_output_and_verified_mirror(self):
+        workflows=Path(__file__).resolve().parents[1]/'.github/workflows'
+        for name in ('build.yml','installer-only.yml'):
+            text=(workflows/name).read_text(encoding='utf-8')
+            self.assertIn('id: shortpath',text)
+            self.assertIn('output-dir: ${{ steps.shortpath.outputs.directory }}',text)
+            self.assertIn('scripts/collect_installer.py',text)
+            self.assertIn('build/installers/*.paf.exe',text)
+            self.assertIn('Portable-Package-Builder@9bf686ec29a46073ca3c27638e62862eb8cc9079',text)
+        text=(workflows/'build.yml').read_text(encoding='utf-8')
+        self.assertIn('Preserve independently validated ZIP when installer compilation fails',text)
+        self.assertIn("steps.validated_zip.outcome == 'success'",text)
+        self.assertIn("steps.smoke.outcome == 'success'",text)
+        self.assertIn('package-revision: b1r5',text)
+        repack=(workflows/'installer-only.yml').read_text(encoding='utf-8')
+        self.assertIn('package-revision: ${{ steps.recover.outputs.original-revision }}',repack)
+

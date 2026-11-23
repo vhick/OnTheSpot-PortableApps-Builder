@@ -102,12 +102,26 @@ jobs:
           $releaseTag="portable-$($i.upstream_version)-$env:ORIGINAL_REVISION-$env:ENGINE"
           python scripts/probe_release.py --repository "$env:TARGET_REPOSITORY" --tag "$releaseTag" --mode guard
           if ($LASTEXITCODE -ne 0) { throw 'RELEASE_PROBE_FAILED: see RELEASE_EXISTENCE_CHECK_FAILED above' }
+      - name: Prepare short isolated path for NSIS compiler
+        id: shortpath
+        run: |
+          # The shared action copies app files under output-dir/_upb_work/official/isolated-source/.
+          # Deep Python package metadata may exceed NSIS's legacy source-file path limit
+          # if output-dir is nested inside GitHub's already long checkout location.
+          $drive = [System.IO.Path]::GetPathRoot($env:RUNNER_TEMP)
+          if (-not $drive -or -not [System.IO.Path]::IsPathRooted($drive)) { throw 'SHORT_INSTALLER_DRIVE_UNAVAILABLE' }
+          $root = Join-Path $drive ("otsi-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT")
+          if ($root.Length -gt 48) { throw "SHORT_INSTALLER_PATH_TOO_LONG: $root" }
+          if (Test-Path -LiteralPath $root) { throw "SHORT_INSTALLER_PATH_ALREADY_EXISTS: $root" }
+          New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+          "directory=$root" >> $env:GITHUB_OUTPUT
+          Write-Host "SHORT_INSTALLER_PATH_READY: $root"
       - name: Build installer with verified shared r5 source-based action
         id: package
         uses: vhick/Portable-Package-Builder@9bf686ec29a46073ca3c27638e62862eb8cc9079
         with:
           source-dir: build/recovered/OnTheSpotPortable
-          output-dir: build/installers
+          output-dir: ${{ steps.shortpath.outputs.directory }}
           engine: ${{ inputs.installer-engine }}
           running-exe: OnTheSpotPortable.exe
           package-revision: ${{ steps.recover.outputs.original-revision }}
@@ -117,6 +131,11 @@ jobs:
           ENGINE: ${{ inputs.installer-engine }}
           INSTALLER: ${{ steps.package.outputs.installer-file }}
         run: python scripts/validate.py installer --installer "$env:INSTALLER" --engine "$env:ENGINE" --stage build/recovered/OnTheSpotPortable
+      - name: Copy validated installer back into workspace with verified sidecars
+        id: collect
+        env:
+          INSTALLER: ${{ steps.package.outputs.installer-file }}
+        run: python scripts/collect_installer.py --source "$env:INSTALLER" --destination build/installers
       - name: Set engine-specific release tag from recovered source identity
         id: tag
         env:

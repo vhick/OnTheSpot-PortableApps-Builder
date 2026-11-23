@@ -1,12 +1,14 @@
 {
-  "builder_revision": "b1r4",
+  "builder_revision": "b1r5",
   "audit_date": "2026-11-23",
   "audited_upstream_release": "v2.0.5",
-  "upstream_release_status": "source_inspected_not_windows_verified",
-  "windows_build_status": "not_run",
+  "upstream_release_status": "v2.0.5 source verified and Windows runtime smoke passed in b1r4 GitHub Actions log",
+  "windows_build_status": "b1r4 Windows Python and React builds, compiled launcher, ZIP validation and local server smoke passed (2026-11-23)",
   "installer_custom_status": "not_run",
-  "installer_official_status": "not_run",
+  "installer_official_status": "b1r4 failed with NSIS deep source path; b1r5 short compilation-path correction unverified on Windows",
   "shared_package_builder_commit": "9bf686ec29a46073ca3c27638e62862eb8cc9079",
   "shared_release_publisher_commit": "cb64f86ac2d8c67506db5832de07f9ff58cbeaeb",
-  "known_working_app_specific_builds": []
+  "known_working_app_specific_builds": [
+    "b1r4: Windows runtime+ZIP only, not validated installer"
+  ]
 }

@@ -1,8 +1,8 @@
-# OnTheSpot v2 PortableApps Builder Kit — b1r4
+# OnTheSpot v2 PortableApps Builder Kit — b1r5
 
 An **independent**, application-specific, source-based Windows PortableApps builder. It does not fork the upstream OnTheSpot project. GitHub Actions resolves a compatible stable v2+ release, builds its React frontend and Python backend with upstream locks, bundles a genuine Windows x64 Python runtime and necessary tools, compiles a native Win32 launcher, validates an independently generated PortableApps ZIP, and builds **one** installer via the shared Package Builder. Publishing is OFF unless explicitly selected.
 
-> **Validation status:** Repository audit and 32 isolated unit tests completed in the authoring environment. The full Windows GitHub Actions build, actual runtime smoke, selected-engine installer compilation, real installation and upgrade testing **have not been executed by the authoring environment**. Run a test workflow before enabling publishing. The kit is a testable implementation, **not a verified successful Windows release**.
+> **Validation status:** The uploaded **b1r4** GitHub Actions log demonstrates a successful real Windows build of OnTheSpot v2.0.5, independently validated PortableApps ZIP, and native launcher/browser smoke test (HTTP 200). The official installer then failed due to a deep source path. **b1r5 fixes the compilation-path layout, but its installer has not yet been compiled or installed on Windows.** This builder source ZIP does not contain the application.
 
 ## Important upstream change
 
@@ -10,11 +10,11 @@ Starting in OnTheSpot v2, the application uses **FastAPI + React**: it is a loca
 
 Upstream documentation: https://github.com/ots-downloader/onthespot/blob/v2.0.5/docs/INSTALLATION.md
 
-## Updating an existing b1r1/b1r2/b1r3 repository to b1r4
+## Updating an existing builder repository to b1r5
 
 1. Open the existing `OnTheSpot-PortableApps-Builder` repository in GitHub Desktop.
-2. Extract **all** files from this b1r4 ZIP over your existing working-tree files, preserving the `.git` directory and any local uncommitted work. The kit contains source only, no compiled application or user `Data` folder.
-3. Review the changed files in GitHub Desktop, commit `Fix Windows 8.3 icon test path aliases (b1r4)`, then push.
+2. Extract **all** files from this b1r5 ZIP over your existing working-tree files, preserving the `.git` directory and any local uncommitted work. The kit contains source only, no compiled application or user `Data` folder.
+3. Review the changed files in GitHub Desktop, commit `Fix official installer deep-path compilation (b1r5)`, then push.
 4. Run **Build OnTheSpot PortableApps (Windows)** with **publish = false** first. Use the default `custom-nsis` engine for an initial test, or choose `official` explicitly to test that engine. Only publish after successful runtime and installation checks.
 5. No new independent repository is needed for this update. Keep previous validated releases and user `Data` unchanged.
 
@@ -23,15 +23,15 @@ Upstream documentation: https://github.com/ots-downloader/onthespot/blob/v2.0.5/
 1. In GitHub Desktop, select **File → New repository**. Name it `OnTheSpot-PortableApps-Builder` and choose your own local folder. Use an empty repository.
 2. **Choose Public or Private** when publishing the new repository on GitHub. Do not change the visibility after the fact unless you intend to. Public repositories produce public releases; private repositories produce private releases.
 3. Download and extract this **builder ZIP** into that new repository's local directory. The hidden `.github` folder must appear at repository root. Do not place a second wrapper folder around its contents.
-4. In GitHub Desktop, enter the commit summary `Fix Windows 8.3 icon test path aliases (b1r4)` and commit all source files. Select **Publish repository** and preserve your desired visibility.
+4. In GitHub Desktop, enter the commit summary `Fix official installer deep-path compilation (b1r5)` and commit all source files. Select **Publish repository** and preserve your desired visibility.
 5. On GitHub.com, open **Actions → Build OnTheSpot PortableApps (Windows)** → **Run workflow**.
 6. Leave **upstream-version** empty for latest suitable stable v2+ release; leave **installer-engine** as **custom-nsis** to begin; keep **publish = false**. Click **Run workflow**.
 7. When the job is complete and **green**, open its run summary. Under **Artifacts**, download `OnTheSpotPortable-test-<run ID>`; unzip it. This contains an independent PortableApps ZIP, the selected `.paf.exe` installer, checksums and provenance notes.
 8. If the default engine tests successfully, optionally run another **test build** choosing **official**. It compiles actual PortableApps.com Installer **3.9.24** source through the shared Package Builder, not an installer-download wizard. Do not assume success from the default engine alone.
 9. Only after checking runtime and upgrades, rerun with **publish = true**. Validated output goes to **your new repository → Releases**. Test artifacts are **not** uploaded when production publishing is enabled.
-10. To extract without installation, unpack the **inner** `OnTheSpotPortable_vX.Y.Z_b1r4.zip` to a `PortableApps` folder and start `OnTheSpotPortable/OnTheSpotPortable.exe`. Or use the selected `.paf.exe` installer. The launcher requires no administrator permissions for normal usage.
+10. To extract without installation, unpack the **inner** `OnTheSpotPortable_vX.Y.Z_b1r5.zip` to a `PortableApps` folder and start `OnTheSpotPortable/OnTheSpotPortable.exe`. Or use the selected `.paf.exe` installer. The launcher requires no administrator permissions for normal usage.
 11. On upgrade, stop the program, **back up the entire `Data` directory**, then upgrade/replace **App**, root launcher, metadata and **Other**. Never overwrite or delete `Data`, including empty folders and `Data/.managed-paths.json`.
-12. To rebuild **only the installer**, choose **Actions → Rebuild OnTheSpot Installer Only (Windows)**. Provide **one**: an existing production `source-release-tag` **or** an existing successful test run's numeric `source-test-run-id`. Choose desired engine; leave publish false for first attempt. The existing ZIP's SHA-256 and build identity are verified. The application binaries are **not** rebuilt.
+12. To rebuild **only the installer**, choose **Actions → Rebuild OnTheSpot Installer Only (Windows)**. Provide **one**: an existing production `source-release-tag` **or** an existing test run's numeric `source-test-run-id` that contains a validated ZIP artifact (including b1r5 runs with installer-only failure). Choose desired engine; leave publish false for first attempt. The existing ZIP's SHA-256 and build identity are verified. The application binaries are **not** rebuilt.
 
 ### Where the application stores files
 
@@ -112,3 +112,14 @@ See `docs/SOURCE-AUDIT.md`, `docs/LOCAL-VALIDATION.md`, `docs/COMPATIBILITY-BASE
 - Added a regression test for a non-canonical `..` path alias naming the same image. This prevents the test suite from incorrectly comparing path strings in future versions.
 - Package and release identity bumped to `b1r4`; shared installer/publisher commit pins, application dependencies and launch handling are unchanged. A separate publisher-output correction also includes the already-generated SHA256SUMS.txt alongside ZIPs so installer-only rebuilds from production releases can verify source archives.
 - **Validation:** 32 local isolated Python tests, workflow YAML parsing and source checksums. Actual Windows execution, installer compilation, installation and upgrade remain unverified at authoring time.
+
+## b1r5 Windows official installer deep-path fix (23 November 2026)
+
+- Observed the real b1r4 Windows run `logs_122336351531.zip`: **all 32 regression tests passed;** Python and React compiled, FFmpeg/Deno acquired, the PE launcher compiled, ZIP integrity verified, and the Windows launcher returned HTTP 200 with Data settings under portable storage. The selected `official` engine then failed at `File: failed opening file ... cryptography-rust.cyclonedx.json`. The installed shared source-based NSIS toolchain was confirmed in the logs.
+- The shared builder creates `output-dir/_upb_work/official/isolated-source/OnTheSpotPortable/...`, so using a deeply nested `build/installers` output directory can hit NSIS's traditional long-path constraint when the app contains dependency metadata. This failure **does not** indicate an invalid Python cryptography dependency or justify deleting `.dist-info` or SBOM files.
+- b1r5 prepares a short, isolated directory at the root of the GitHub-hosted Windows runner's temporary drive, and passes that **absolute** directory via the shared builder's existing verified `output-dir` input. No installer compiler, branding, dependency, or shared action code is copied or patched. Both `custom-nsis` and `official` retain exactly the same engine selection and pinned shared versions.
+- After the shared builder validates its installer, the application-specific `collect_installer.py` checks the original `.sha256` and `.json` sidecars, verifies the hash again during copy, refuses overwrites, and mirrors the files to workspace-relative `build/installers` for artifact download and the existing universal publisher. Original compiler output remains unchanged, and the mirrored provenance records the original compiler path.
+- If only the installer step fails in a test build, b1r5 uploads the **already validated** ZIP and SHA256SUMS as a standalone Actions artifact, without uploading an incomplete installer. The Installer-Only workflow can later recover that successful ZIP using the original Build run ID, avoiding recompilation. The installer-only workflow uses the same short-path safeguard.
+- **Verification:** static workflow YAML, local installer-copy regression tests, and ZIP/source integrity checks can run here. A new `official` Windows GitHub Actions run is required to prove that path shortening resolves the compiler error; actual installed upgrade behavior also remains unverified.
+
+**Important for this particular b1r4 failure:** The b1r4 Actions job generated a valid ZIP on its temporary runner but did not upload an artifact after the installer failed. That run ID is therefore **not** a valid installer-only source. Start one b1r5 test build; subsequent b1r5 installer-only failures preserve the validated ZIP for installer-only recovery.
