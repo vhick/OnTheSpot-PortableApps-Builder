@@ -1,0 +1,12 @@
+{
+  "builder_revision": "b1r1",
+  "audit_date": "2026-11-23",
+  "audited_upstream_release": "v2.0.5",
+  "upstream_release_status": "source_inspected_not_windows_verified",
+  "windows_build_status": "not_run",
+  "installer_custom_status": "not_run",
+  "installer_official_status": "not_run",
+  "shared_package_builder_commit": "9bf686ec29a46073ca3c27638e62862eb8cc9079",
+  "shared_release_publisher_commit": "cb64f86ac2d8c67506db5832de07f9ff58cbeaeb",
+  "known_working_app_specific_builds": []
+}

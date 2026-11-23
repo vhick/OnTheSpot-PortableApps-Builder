@@ -1,0 +1,194 @@
+name: Build OnTheSpot PortableApps (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream-version:
+        description: 'Optional stable v2+ tag (blank = latest stable v2+ release)'
+        required: false
+        default: ''
+        type: string
+      installer-engine:
+        description: 'One installer engine; no automatic fallback'
+        required: true
+        default: custom-nsis
+        type: choice
+        options:
+          - custom-nsis
+          - official
+      publish:
+        description: 'Publish release after all validations (default OFF)'
+        required: true
+        default: false
+        type: boolean
+      prune-managed-releases:
+        description: 'Opt-in prune older publisher-managed releases (default OFF)'
+        required: true
+        default: false
+        type: boolean
+
+# One Windows machine: no unnecessary multi-OS matrix or duplicate app build.
+permissions:
+  contents: write # Required by optional publisher; only runs with manual publish=true.
+
+concurrency:
+  group: ots-build-${{ github.ref }}-${{ inputs.upstream-version }}-${{ inputs.installer-engine }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout this independent builder repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up build helper Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run portable builder regression tests
+        run: python -m unittest discover -s tests -v
+      - name: Resolve latest compatible stable upstream release
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          SELECTED_VERSION: ${{ inputs.upstream-version }}
+        run: python scripts/release.py resolve --version "$env:SELECTED_VERSION"
+      - name: Skip existing identical production release before expensive work
+        id: existing
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENGINE: ${{ inputs.installer-engine }}
+          TAG: ${{ steps.release.outputs.upstream_tag }}
+        run: |
+          $tag="portable-$env:TAG-b1r1-$env:ENGINE"
+          gh release view $tag --repo '${{ github.repository }}' *> $null
+          if ($LASTEXITCODE -eq 0) {
+            "skip=true" >> $env:GITHUB_OUTPUT
+            Write-Host "RELEASE_ALREADY_EXISTS: $tag. No new build or overwrite is necessary."
+          } else { "skip=false" >> $env:GITHUB_OUTPUT }
+      - name: Checkout tagged upstream release (no upstream fork)
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ots-downloader/onthespot
+          ref: ${{ steps.release.outputs.upstream_tag }}
+          path: upstream
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Fail-closed source architecture preflight
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        id: inspect
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/release.py inspect --source upstream --version "${{ steps.release.outputs.upstream_tag }}" --out build/identity.json
+      - name: Set up exact compatible Node major from upstream Dockerfile
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.inspect.outputs.node_major }}
+      - name: Set up upstream-selected uv build tooling
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ steps.inspect.outputs.uv_version }}
+          enable-cache: true
+      - name: Install icon processing build dependency
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        run: python -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Create PortableApps metadata and source provenance
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        run: python scripts/stage.py init --source upstream --stage build/staging --identity build/identity.json
+      - name: Assemble locked Python runtime and production React UI
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        run: |
+          ./scripts/build_runtime.ps1 -Source "$PWD/upstream" -Stage "$PWD/build/staging/OnTheSpotPortable" -Identity "$PWD/build/identity.json"
+      - name: Acquire and checksum trusted FFmpeg and Deno Windows tools
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/external_tools.py --source upstream --stage build/staging/OnTheSpotPortable
+      - name: Compile genuine Windows PE PortableApps launcher and icon
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        run: |
+          ./scripts/compile_launcher.ps1 -IconPath "$PWD/build/staging/OnTheSpotPortable/App/AppInfo/appicon.ico" -OutExe "$PWD/build/staging/OnTheSpotPortable/OnTheSpotPortable.exe"
+      - name: Generate ZIP independently of installer engine
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        id: zip
+        run: python scripts/stage.py zip --stage build/staging --output build/output
+      - name: Validate complete PortableApps package and ZIP integrity
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        run: |
+          python scripts/validate.py stage --stage build/staging/OnTheSpotPortable
+          python scripts/validate.py zip --zip '${{ steps.zip.outputs.zip-file }}'
+          python scripts/validate.py verify-sha --zip '${{ steps.zip.outputs.zip-file }}' --manifest build/output/SHA256SUMS.txt
+      - name: Run real Windows launcher and browser UI smoke test
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        timeout-minutes: 6
+        run: python scripts/smoke_windows.py --zip '${{ steps.zip.outputs.zip-file }}'
+      - name: Build one selected installer using verified shared r5 action
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        id: package
+        uses: vhick/Portable-Package-Builder@9bf686ec29a46073ca3c27638e62862eb8cc9079
+        with:
+          source-dir: build/staging/OnTheSpotPortable
+          output-dir: build/installers
+          engine: ${{ inputs.installer-engine }}
+          running-exe: OnTheSpotPortable.exe
+          package-revision: b1r1
+          timeout-seconds: '1200'
+      - name: Validate selected installer identity and exact provenance
+        if: ${{ steps.existing.outputs.skip != 'true' }}
+        env:
+          INSTALLER: ${{ steps.package.outputs.installer-file }}
+          ENGINE: ${{ inputs.installer-engine }}
+        run: python scripts/validate.py installer --installer "$env:INSTALLER" --engine "$env:ENGINE" --stage build/staging/OnTheSpotPortable
+      - name: Collect only validated test distribution files
+        if: ${{ !inputs.publish && steps.existing.outputs.skip != 'true' }}
+        env:
+          INSTALLER: ${{ steps.package.outputs.installer-file }}
+          ZIP: ${{ steps.zip.outputs.zip-file }}
+        run: |
+          New-Item -ItemType Directory -Force -Path build/distribution | Out-Null
+          Copy-Item -LiteralPath "$env:ZIP" -Destination build/distribution
+          Copy-Item -LiteralPath 'build/output/SHA256SUMS.txt' -Destination build/distribution
+          foreach ($file in @($env:INSTALLER,"$env:INSTALLER.json","$env:INSTALLER.sha256")) {
+            Copy-Item -LiteralPath "$file" -Destination build/distribution
+          }
+      - name: Upload validated test packages (never a production release)
+        if: ${{ !inputs.publish && steps.existing.outputs.skip != 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnTheSpotPortable-test-${{ github.run_id }}
+          path: |
+            build/distribution/*
+          if-no-files-found: error
+          retention-days: 5
+      - name: Publisher preflight dry run (no upload)
+        if: ${{ inputs.publish && steps.existing.outputs.skip != 'true' }}
+        uses: vhick/portable-release-publisher@cb64f86ac2d8c67506db5832de07f9ff58cbeaeb
+        with:
+          files: build/output/OnTheSpotPortable_*.zip;build/installers/*.paf.exe
+          tag: portable-${{ steps.zip.outputs.upstream-version }}-b1r1-${{ inputs.installer-engine }}
+          release-title: OnTheSpot ${{ steps.zip.outputs.upstream-version }} PortableApps b1r1 (${{ inputs.installer-engine }})
+          tag-prefix: portable-
+          keep-releases: '3'
+          prune: 'false'
+          dry-run: 'true'
+      - name: Publish validated ZIP and selected installer (no redundant artifact upload)
+        if: ${{ inputs.publish && steps.existing.outputs.skip != 'true' }}
+        uses: vhick/portable-release-publisher@cb64f86ac2d8c67506db5832de07f9ff58cbeaeb
+        with:
+          files: build/output/OnTheSpotPortable_*.zip;build/installers/*.paf.exe
+          tag: portable-${{ steps.zip.outputs.upstream-version }}-b1r1-${{ inputs.installer-engine }}
+          release-title: OnTheSpot ${{ steps.zip.outputs.upstream-version }} PortableApps b1r1 (${{ inputs.installer-engine }})
+          tag-prefix: portable-
+          keep-releases: '3'
+          prune: ${{ inputs.prune-managed-releases }}
+          dry-run: 'false'

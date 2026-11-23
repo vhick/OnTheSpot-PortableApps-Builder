@@ -1,0 +1,14 @@
+# Builder source only. Never commit application binaries, downloaded tools or credentials.
+build/
+upstream/
+__pycache__/
+*.pyc
+*.pyo
+*.paf.exe
+*.exe
+*.dll
+*.pyd
+*.zip
+.env
+credentials.*
+maintenance-report.json

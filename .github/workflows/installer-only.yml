@@ -1,0 +1,154 @@
+name: Rebuild OnTheSpot Installer Only (Windows)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source-release-tag:
+        description: 'Existing published tag containing verified original PortableApps ZIP; leave blank for a test run'
+        required: false
+        default: ''
+        type: string
+      source-test-run-id:
+        description: 'Existing successful BUILD Actions run ID that uploaded test ZIP; leave blank if using release tag'
+        required: false
+        default: ''
+        type: string
+      installer-engine:
+        description: 'Choose exactly one installer engine'
+        default: custom-nsis
+        type: choice
+        options:
+          - custom-nsis
+          - official
+      publish:
+        description: 'Publish validated result as engine-specific release (default OFF)'
+        default: false
+        type: boolean
+
+permissions:
+  contents: write # Optional publisher; source downloads use GITHUB_TOKEN read.
+  actions: read # Read existing validation artifacts from another Actions run.
+concurrency:
+  group: ots-repackage-${{ github.ref }}-${{ inputs.source-release-tag }}-${{ inputs.source-test-run-id }}-${{ inputs.installer-engine }}
+  cancel-in-progress: false
+jobs:
+  repack:
+    runs-on: windows-2022
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout this builder
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify source input selection
+        env:
+          TAG: ${{ inputs.source-release-tag }}
+          RUN: ${{ inputs.source-test-run-id }}
+        run: |
+          if (([bool]$env:TAG) -eq ([bool]$env:RUN)) {
+            throw 'SELECT_EXACTLY_ONE_SOURCE: choose a published release tag OR a test build Actions run ID.'
+          }
+          if ($env:RUN -and $env:RUN -notmatch '^\d+$') { throw 'INVALID_SOURCE_RUN_ID' }
+      - name: Download existing validation artifact by run ID
+        if: ${{ inputs.source-test-run-id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: OnTheSpotPortable-test-${{ inputs.source-test-run-id }}
+          run-id: ${{ inputs.source-test-run-id }}
+          github-token: ${{ github.token }}
+          path: build/input
+      - name: Download published release ZIP and publisher SHA-256 manifest
+        if: ${{ inputs.source-release-tag != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: ${{ inputs.source-release-tag }}
+        run: |
+          New-Item -ItemType Directory -Force -Path build/input | Out-Null
+          gh release download "$env:SOURCE_TAG" --repo '${{ github.repository }}' --pattern 'OnTheSpotPortable_*.zip' --dir build/input
+          if ($LASTEXITCODE -ne 0) { throw 'PUBLISHED_ZIP_DOWNLOAD_FAILED' }
+          gh release download "$env:SOURCE_TAG" --repo '${{ github.repository }}' --pattern 'SHA256SUMS.txt' --dir build/input
+          if ($LASTEXITCODE -ne 0) { throw 'PUBLISHED_SHA256_MANIFEST_MISSING' }
+      - name: Verify ZIP checksum, provenance, and extract complete stage
+        id: recover
+        run: |
+          $zips=@(Get-ChildItem build/input -File -Filter 'OnTheSpotPortable_*.zip')
+          if ($zips.Count -ne 1) { throw "SOURCE_ZIP_AMBIGUOUS: expected exactly 1, got $($zips.Count)" }
+          $zip=$zips[0].FullName
+          python scripts/validate.py verify-sha --zip "$zip" --manifest build/input/SHA256SUMS.txt
+          if ($LASTEXITCODE -ne 0) { throw 'SOURCE_ZIP_CHECKSUM_REJECTED' }
+          python scripts/validate.py extract --zip "$zip" --out build/recovered
+          if ($LASTEXITCODE -ne 0) { throw 'SOURCE_ZIP_VALIDATION_REJECTED' }
+          "zip-file=$zip" >> $env:GITHUB_OUTPUT
+      - name: Refuse to overwrite an existing engine-specific production release
+        if: ${{ inputs.publish }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENGINE: ${{ inputs.installer-engine }}
+        run: |
+          $i=Get-Content -Raw build/recovered/OnTheSpotPortable/Other/Source/BUILD-IDENTITY.json | ConvertFrom-Json
+          $releaseTag="portable-$($i.upstream_version)-b1r1-$env:ENGINE"
+          gh release view $releaseTag --repo '${{ github.repository }}' *> $null
+          if ($LASTEXITCODE -eq 0) { throw "PRODUCTION_RELEASE_ALREADY_EXISTS: $releaseTag. No overwrite allowed." }
+      - name: Build installer with verified shared r5 source-based action
+        id: package
+        uses: vhick/Portable-Package-Builder@9bf686ec29a46073ca3c27638e62862eb8cc9079
+        with:
+          source-dir: build/recovered/OnTheSpotPortable
+          output-dir: build/installers
+          engine: ${{ inputs.installer-engine }}
+          running-exe: OnTheSpotPortable.exe
+          package-revision: b1r1
+          timeout-seconds: '1200'
+      - name: Verify installer and exact source identity
+        env:
+          ENGINE: ${{ inputs.installer-engine }}
+          INSTALLER: ${{ steps.package.outputs.installer-file }}
+        run: python scripts/validate.py installer --installer "$env:INSTALLER" --engine "$env:ENGINE" --stage build/recovered/OnTheSpotPortable
+      - name: Set engine-specific release tag from recovered source identity
+        id: tag
+        env:
+          ENGINE: ${{ inputs.installer-engine }}
+        run: |
+          $i=Get-Content -Raw build/recovered/OnTheSpotPortable/Other/Source/BUILD-IDENTITY.json | ConvertFrom-Json
+          "release-tag=portable-$($i.upstream_version)-b1r1-$env:ENGINE" >> $env:GITHUB_OUTPUT
+          "app-version=$($i.upstream_version)" >> $env:GITHUB_OUTPUT
+      - name: Upload new test installer only, no app compilation
+        if: ${{ !inputs.publish }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnTheSpotPortable-repackage-test-${{ github.run_id }}
+          path: |
+            build/installers/*.paf.exe
+            build/installers/*.paf.exe.json
+            build/installers/*.paf.exe.sha256
+          if-no-files-found: error
+          retention-days: 5
+      - name: Shared publisher dry run
+        if: ${{ inputs.publish }}
+        uses: vhick/portable-release-publisher@cb64f86ac2d8c67506db5832de07f9ff58cbeaeb
+        with:
+          files: build/input/OnTheSpotPortable_*.zip;build/installers/*.paf.exe
+          tag: ${{ steps.tag.outputs.release-tag }}
+          release-title: OnTheSpot ${{ steps.tag.outputs.app-version }} PortableApps installer-only (${{ inputs.installer-engine }})
+          tag-prefix: portable-
+          keep-releases: '3'
+          prune: 'false'
+          dry-run: 'true'
+      - name: Publish validated original ZIP and selected engine installer
+        if: ${{ inputs.publish }}
+        uses: vhick/portable-release-publisher@cb64f86ac2d8c67506db5832de07f9ff58cbeaeb
+        with:
+          files: build/input/OnTheSpotPortable_*.zip;build/installers/*.paf.exe
+          tag: ${{ steps.tag.outputs.release-tag }}
+          release-title: OnTheSpot ${{ steps.tag.outputs.app-version }} PortableApps installer-only (${{ inputs.installer-engine }})
+          tag-prefix: portable-
+          keep-releases: '3'
+          prune: 'false'
+          dry-run: 'false'
