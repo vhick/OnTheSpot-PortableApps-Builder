@@ -85,17 +85,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'SOURCE_ZIP_CHECKSUM_REJECTED' }
           python scripts/validate.py extract --zip "$zip" --out build/recovered
           if ($LASTEXITCODE -ne 0) { throw 'SOURCE_ZIP_VALIDATION_REJECTED' }
+          $identity=Get-Content -Raw -LiteralPath 'build/recovered/OnTheSpotPortable/Other/Source/BUILD-IDENTITY.json' | ConvertFrom-Json
+          $originalRevision=[string]$identity.package_revision
+          if ($originalRevision -notmatch '^b\d+r\d+$') { throw "SOURCE_PACKAGE_REVISION_INVALID: $originalRevision" }
+          "original-revision=$originalRevision" >> $env:GITHUB_OUTPUT
           "zip-file=$zip" >> $env:GITHUB_OUTPUT
       - name: Refuse to overwrite an existing engine-specific production release
         if: ${{ inputs.publish }}
         env:
-          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TARGET_REPOSITORY: ${{ github.repository }}
           ENGINE: ${{ inputs.installer-engine }}
+          ORIGINAL_REVISION: ${{ steps.recover.outputs.original-revision }}
         run: |
-          $i=Get-Content -Raw build/recovered/OnTheSpotPortable/Other/Source/BUILD-IDENTITY.json | ConvertFrom-Json
-          $releaseTag="portable-$($i.upstream_version)-b1r1-$env:ENGINE"
-          gh release view $releaseTag --repo '${{ github.repository }}' *> $null
-          if ($LASTEXITCODE -eq 0) { throw "PRODUCTION_RELEASE_ALREADY_EXISTS: $releaseTag. No overwrite allowed." }
+          $i=Get-Content -Raw -LiteralPath 'build/recovered/OnTheSpotPortable/Other/Source/BUILD-IDENTITY.json' | ConvertFrom-Json
+          $releaseTag="portable-$($i.upstream_version)-$env:ORIGINAL_REVISION-$env:ENGINE"
+          python scripts/probe_release.py --repository "$env:TARGET_REPOSITORY" --tag "$releaseTag" --mode guard
+          if ($LASTEXITCODE -ne 0) { throw 'RELEASE_PROBE_FAILED: see RELEASE_EXISTENCE_CHECK_FAILED above' }
       - name: Build installer with verified shared r5 source-based action
         id: package
         uses: vhick/Portable-Package-Builder@9bf686ec29a46073ca3c27638e62862eb8cc9079
@@ -104,7 +110,7 @@ jobs:
           output-dir: build/installers
           engine: ${{ inputs.installer-engine }}
           running-exe: OnTheSpotPortable.exe
-          package-revision: b1r1
+          package-revision: ${{ steps.recover.outputs.original-revision }}
           timeout-seconds: '1200'
       - name: Verify installer and exact source identity
         env:
@@ -115,9 +121,10 @@ jobs:
         id: tag
         env:
           ENGINE: ${{ inputs.installer-engine }}
+          ORIGINAL_REVISION: ${{ steps.recover.outputs.original-revision }}
         run: |
           $i=Get-Content -Raw build/recovered/OnTheSpotPortable/Other/Source/BUILD-IDENTITY.json | ConvertFrom-Json
-          "release-tag=portable-$($i.upstream_version)-b1r1-$env:ENGINE" >> $env:GITHUB_OUTPUT
+          "release-tag=portable-$($i.upstream_version)-$env:ORIGINAL_REVISION-$env:ENGINE" >> $env:GITHUB_OUTPUT
           "app-version=$($i.upstream_version)" >> $env:GITHUB_OUTPUT
       - name: Upload new test installer only, no app compilation
         if: ${{ !inputs.publish }}

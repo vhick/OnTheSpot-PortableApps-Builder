@@ -133,4 +133,86 @@ class PackagingTests(unittest.TestCase):
             with zipfile.ZipFile(p,'w') as z:z.writestr('OnTheSpotPortable/Data/nested/empty/',b'')
             with zipfile.ZipFile(p) as z:self.assertIn('OnTheSpotPortable/Data/nested/empty/',z.namelist())
 
-if __name__=='__main__':unittest.main()
+class ProductionReleaseProbeTests(unittest.TestCase):
+    """Tests for first-time publishing and fail-closed API errors."""
+
+    def setUp(self):
+        import probe_release
+        self.probe_release=probe_release
+        self.repo='vhick/OnTheSpot-PortableApps-Builder'
+        self.tag='portable-v2.0.5-b1r2-official'
+        self.token='fake-test-only-token'
+
+    def test_absent_release_is_not_an_error(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        def fake_get(url, token):
+            if '/releases/tags/' in url:
+                raise HTTPError(url,404,'Not Found',{},BytesIO(b''))
+            return {'full_name':self.repo}
+        with patch.object(self.probe_release,'api_get_json',side_effect=fake_get):
+            with tempfile.TemporaryDirectory() as temp:
+                output=Path(temp)/'GITHUB_OUTPUT'
+                self.assertFalse(self.probe_release.probe('skip',self.repo,self.tag,self.token,output))
+                self.assertEqual(output.read_text(encoding='utf-8'),'skip=false\n')
+
+    def test_existing_release_skips_production_build(self):
+        with patch.object(self.probe_release,'api_get_json',return_value={'tag_name':self.tag}):
+            with tempfile.TemporaryDirectory() as temp:
+                output=Path(temp)/'GITHUB_OUTPUT'
+                self.assertTrue(self.probe_release.probe('skip',self.repo,self.tag,self.token,output))
+                self.assertEqual(output.read_text(encoding='utf-8'),'skip=true\n')
+
+    def test_existing_release_blocks_installer_only_publish(self):
+        with patch.object(self.probe_release,'api_get_json',return_value={'tag_name':self.tag}):
+            with self.assertRaisesRegex(RuntimeError,'PRODUCTION_RELEASE_ALREADY_EXISTS'):
+                self.probe_release.probe('guard',self.repo,self.tag,self.token)
+
+    def test_first_time_installer_only_publish_is_allowed(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        def fake_get(url,token):
+            if '/releases/tags/' in url:
+                raise HTTPError(url,404,'Not Found',{},BytesIO(b''))
+            return {'full_name':self.repo}
+        with patch.object(self.probe_release,'api_get_json',side_effect=fake_get):
+            self.assertFalse(self.probe_release.probe('guard',self.repo,self.tag,self.token))
+
+    def test_api_permission_denial_is_fatal_not_missing(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        url='https://api.github.com/repos/'+self.repo+'/releases/tags/'+self.tag
+        with patch.object(self.probe_release,'api_get_json',side_effect=HTTPError(url,403,'Forbidden',{},BytesIO(b''))):
+            with self.assertRaisesRegex(RuntimeError,'RELEASE_PROBE_API_FAILED: HTTP 403'):
+                self.probe_release.release_exists(self.repo,self.tag,self.token)
+
+    def test_repository_inaccessible_404_is_fatal(self):
+        from urllib.error import HTTPError
+        from io import BytesIO
+        def fake_get(url,token):
+            raise HTTPError(url,404,'Not Found',{},BytesIO(b''))
+        with patch.object(self.probe_release,'api_get_json',side_effect=fake_get):
+            with self.assertRaisesRegex(RuntimeError,'RELEASE_REPOSITORY_ACCESS_FAILED: HTTP 404'):
+                self.probe_release.release_exists(self.repo,self.tag,self.token)
+
+    def test_malformed_api_body_and_tag_are_rejected(self):
+        with patch.object(self.probe_release,'api_get_json',return_value={'tag_name':'different'}):
+            with self.assertRaisesRegex(RuntimeError,'RELEASE_PROBE_RESPONSE_INVALID'):
+                self.probe_release.release_exists(self.repo,self.tag,self.token)
+        with self.assertRaisesRegex(RuntimeError,'RELEASE_TAG_INVALID'):
+            self.probe_release.release_exists(self.repo,'not-a-release-tag',self.token)
+        with self.assertRaisesRegex(RuntimeError,'RELEASE_PROBE_AUTH_MISSING'):
+            self.probe_release.release_exists(self.repo,self.tag,'')
+
+    def test_no_bare_gh_release_view_or_hardcoded_repack_revision(self):
+        base=Path(__file__).resolve().parents[1]/'.github/workflows'
+        build=(base/'build.yml').read_text(encoding='utf-8')
+        repack=(base/'installer-only.yml').read_text(encoding='utf-8')
+        self.assertNotIn('gh release view',build)
+        self.assertNotIn('gh release view',repack)
+        self.assertIn('probe_release.py',build)
+        self.assertIn('probe_release.py',repack)
+        self.assertIn('package-revision: ${{ steps.recover.outputs.original-revision }}',repack)
+
+if __name__ == "__main__":
+    unittest.main()

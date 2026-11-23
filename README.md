@@ -1,8 +1,8 @@
-# OnTheSpot v2 PortableApps Builder Kit — b1r1
+# OnTheSpot v2 PortableApps Builder Kit — b1r2
 
 An **independent**, application-specific, source-based Windows PortableApps builder. It does not fork the upstream OnTheSpot project. GitHub Actions resolves a compatible stable v2+ release, builds its React frontend and Python backend with upstream locks, bundles a genuine Windows x64 Python runtime and necessary tools, compiles a native Win32 launcher, validates an independently generated PortableApps ZIP, and builds **one** installer via the shared Package Builder. Publishing is OFF unless explicitly selected.
 
-> **Validation status:** Repository audit and 14 isolated unit tests completed in the authoring environment. The full Windows GitHub Actions build, actual runtime smoke, selected-engine installer compilation, real installation and upgrade testing **have not been executed by the authoring environment**. Run a test workflow before enabling publishing. The kit is a testable implementation, **not a verified successful Windows release**.
+> **Validation status:** Repository audit and 22 isolated unit tests completed in the authoring environment. The full Windows GitHub Actions build, actual runtime smoke, selected-engine installer compilation, real installation and upgrade testing **have not been executed by the authoring environment**. Run a test workflow before enabling publishing. The kit is a testable implementation, **not a verified successful Windows release**.
 
 ## Important upstream change
 
@@ -10,18 +10,26 @@ Starting in OnTheSpot v2, the application uses **FastAPI + React**: it is a loca
 
 Upstream documentation: https://github.com/ots-downloader/onthespot/blob/v2.0.5/docs/INSTALLATION.md
 
-## Quick start for GitHub Desktop (no upstream fork)
+## Updating an existing b1r1 repository to b1r2
+
+1. Open the existing `OnTheSpot-PortableApps-Builder` repository in GitHub Desktop.
+2. Extract **all** files from this b1r2 ZIP over your existing working-tree files, preserving the `.git` directory and any local uncommitted work. The kit contains source only, no compiled application or user `Data` folder.
+3. Review the changed files in GitHub Desktop, commit `Fix first-time release detection and preserve installer-only build identity (b1r2)`, then push.
+4. Run **Build OnTheSpot PortableApps (Windows)** with **publish = false** first. Use the default `custom-nsis` engine for an initial test, or choose `official` explicitly to test that engine. Only publish after successful runtime and installation checks.
+5. No new independent repository is needed for this update. Keep previous validated releases and user `Data` unchanged.
+
+## Quick start for new GitHub Desktop repositories (no upstream fork)
 
 1. In GitHub Desktop, select **File → New repository**. Name it `OnTheSpot-PortableApps-Builder` and choose your own local folder. Use an empty repository.
 2. **Choose Public or Private** when publishing the new repository on GitHub. Do not change the visibility after the fact unless you intend to. Public repositories produce public releases; private repositories produce private releases.
 3. Download and extract this **builder ZIP** into that new repository's local directory. The hidden `.github` folder must appear at repository root. Do not place a second wrapper folder around its contents.
-4. In GitHub Desktop, enter the commit summary `Add OnTheSpot v2 portable source builder b1r1` and commit all source files. Select **Publish repository** and preserve your desired visibility.
+4. In GitHub Desktop, enter the commit summary `Add OnTheSpot v2 portable source builder b1r2` and commit all source files. Select **Publish repository** and preserve your desired visibility.
 5. On GitHub.com, open **Actions → Build OnTheSpot PortableApps (Windows)** → **Run workflow**.
 6. Leave **upstream-version** empty for latest suitable stable v2+ release; leave **installer-engine** as **custom-nsis** to begin; keep **publish = false**. Click **Run workflow**.
 7. When the job is complete and **green**, open its run summary. Under **Artifacts**, download `OnTheSpotPortable-test-<run ID>`; unzip it. This contains an independent PortableApps ZIP, the selected `.paf.exe` installer, checksums and provenance notes.
 8. If the default engine tests successfully, optionally run another **test build** choosing **official**. It compiles actual PortableApps.com Installer **3.9.24** source through the shared Package Builder, not an installer-download wizard. Do not assume success from the default engine alone.
 9. Only after checking runtime and upgrades, rerun with **publish = true**. Validated output goes to **your new repository → Releases**. Test artifacts are **not** uploaded when production publishing is enabled.
-10. To extract without installation, unpack the **inner** `OnTheSpotPortable_vX.Y.Z_b1r1.zip` to a `PortableApps` folder and start `OnTheSpotPortable/OnTheSpotPortable.exe`. Or use the selected `.paf.exe` installer. The launcher requires no administrator permissions for normal usage.
+10. To extract without installation, unpack the **inner** `OnTheSpotPortable_vX.Y.Z_b1r2.zip` to a `PortableApps` folder and start `OnTheSpotPortable/OnTheSpotPortable.exe`. Or use the selected `.paf.exe` installer. The launcher requires no administrator permissions for normal usage.
 11. On upgrade, stop the program, **back up the entire `Data` directory**, then upgrade/replace **App**, root launcher, metadata and **Other**. Never overwrite or delete `Data`, including empty folders and `Data/.managed-paths.json`.
 12. To rebuild **only the installer**, choose **Actions → Rebuild OnTheSpot Installer Only (Windows)**. Provide **one**: an existing production `source-release-tag` **or** an existing successful test run's numeric `source-test-run-id`. Choose desired engine; leave publish false for first attempt. The existing ZIP's SHA-256 and build identity are verified. The application binaries are **not** rebuilt.
 
@@ -75,6 +83,13 @@ Shared Publisher: https://github.com/vhick/portable-release-publisher (verified 
 - Package size can be large because the bundled Python, FFmpeg and frontend run without requiring Python or Node on the destination computer.
 - The compiled native launcher displays a Stop button and owns the server process in a Windows Job Object. Force-killing the launcher closes the server; this is safer than leaving an uncontrolled background service. Test whether your antivirus and Windows version permit Windows Job Objects.
 - **No actual production `.paf.exe` or Windows application binary is included in this builder source ZIP.** Those are created from upstream on GitHub Actions. The builder ZIP itself is not an installable application.
+
+## b1r2 GitHub Actions fix (23 November 2026)
+
+- Fixed first-time production builds failing at **Skip existing identical production release** when `gh release view` returned exit code 1 for a tag that did not yet exist. Under `pwsh`, this accidentally ended the step before compilation.
+- Both primary build and installer-only workflows now use `scripts/probe_release.py` with the authenticated GitHub Releases API. A confirmed 404 release **and accessible repository** means proceed; a real existing release is skipped (build) or blocked (installer-only); authorization, rate-limit, and network errors fail visibly rather than being mistaken for a new release.
+- Installer-only packages retain the original ZIP's **package revision** (b1r1 or b1r2) in release identity rather than silently relabeling application binaries when using a newer builder.
+- The supplied user run selected `official` with publishing enabled. The error occurred before the official engine was called. **No Windows application compilation or installer validation has succeeded in that failed run**. Test with publishing disabled first.
 
 ## Source and licenses
 

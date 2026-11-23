@@ -45,7 +45,7 @@ def init(stage,source,identity):
         ImageOps.pad(img,(size,size),method=Image.Resampling.LANCZOS,color=(0,0,0,0)).save(icon_info/f'appicon_{size}.png')
     ImageOps.pad(img,(256,256),method=Image.Resampling.LANCZOS,color=(0,0,0,0)).save(icon_info/'appicon.ico',format='ICO',sizes=[(16,16),(32,32),(48,48),(64,64),(256,256)])
     if (icon_info/'appicon.ico').stat().st_size<100:raise RuntimeError('ICON_COMPILE_FAILED')
-    ini='''[Format]\nType=PortableApps.comFormat\nVersion=3.9\n\n[Details]\nName=OnTheSpot Portable\nAppID=OnTheSpotPortable\nPublisher=OnTheSpot contributors & independent builder\nHomepage=https://github.com/ots-downloader/onthespot\nCategory=Music & Video\nDescription=OnTheSpot 2.x local web-app music and media downloader; unofficial portable package.\nLanguage=Multilingual\nTrademarks=OnTheSpot is a project of its upstream contributors.\n\n[License]\nShareable=true\nOpenSource=true\nFreeware=true\nCommercialUse=true\nEULAVersion=1\n\n[Version]\nPackageVersion=VERSION4\nDisplayVersion=DISPLAY b1r1\n\n[Control]\nIcons=1\nStart=OnTheSpotPortable.exe\n'''.replace('VERSION4',version).replace('DISPLAY',v)
+    ini='''[Format]\nType=PortableApps.comFormat\nVersion=3.9\n\n[Details]\nName=OnTheSpot Portable\nAppID=OnTheSpotPortable\nPublisher=OnTheSpot contributors & independent builder\nHomepage=https://github.com/ots-downloader/onthespot\nCategory=Music & Video\nDescription=OnTheSpot 2.x local web-app music and media downloader; unofficial portable package.\nLanguage=Multilingual\nTrademarks=OnTheSpot is a project of its upstream contributors.\n\n[License]\nShareable=true\nOpenSource=true\nFreeware=true\nCommercialUse=true\nEULAVersion=1\n\n[Version]\nPackageVersion=VERSION4\nDisplayVersion=DISPLAY b1r2\n\n[Control]\nIcons=1\nStart=OnTheSpotPortable.exe\n'''.replace('VERSION4',version).replace('DISPLAY',v)
     (icon_info/'appinfo.ini').write_text(ini,encoding='utf-8')
     help=root/'help.html'
     if not help.exists():
@@ -61,7 +61,7 @@ Use only services and downloads you are authorized to access.</p>
 <a href="https://github.com/ots-downloader/onthespot/issues">Upstream support</a></p></body></html>\n''',encoding='utf-8')
     if not help.read_text(encoding='utf-8').strip().lower().startswith('<!doctype html>'):
         raise RuntimeError('INVALID_ROOT_HELP_HTML')
-    info['package_revision']='b1r1'
+    info['package_revision']='b1r2'
     (root/'Other/Source/BUILD-IDENTITY.json').write_text(json.dumps(info,indent=2)+'\n',encoding='utf-8')
     shutil.copyfile(source/'LICENSE',root/'Other/Source/ONTHESPOT-GPL-2.0.txt')
     (root/'Other/Source/PORTABLE-LICENSE-NOTICE.txt').write_text(
@@ -80,7 +80,7 @@ def package(stage,output):
     output=Path(output);output.mkdir(parents=True,exist_ok=True)
     info=json.loads((root/'Other/Source/BUILD-IDENTITY.json').read_text(encoding='utf-8'))
     safe=info['upstream_version'].lstrip('v')
-    file=output/f'OnTheSpotPortable_v{safe}_b1r1.zip'
+    file=output/f'OnTheSpotPortable_v{safe}_b1r2.zip'
     with zipfile.ZipFile(file,'w',compression=zipfile.ZIP_DEFLATED,compresslevel=7) as z:
         for item in sorted(root.rglob('*')):
             rel=item.relative_to(root.parent).as_posix()

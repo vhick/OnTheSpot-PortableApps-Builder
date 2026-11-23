@@ -2,6 +2,9 @@
 
 | Message or issue | Meaning | What to do |
 | --- | --- | --- |
+| `RELEASE_NOT_FOUND` (informational) | Target engine-specific tag does not exist yet | Expected for first production build. The check continues normally. |
+| `RELEASE_PROBE_API_FAILED` / `RELEASE_REPOSITORY_ACCESS_FAILED` | GitHub API unavailable, token lacks access, or rate-limited | Inspect HTTP status; do not treat authorization/network failures as an absent release. |
+| `PRODUCTION_RELEASE_ALREADY_EXISTS` | Target tag is already published | Use the existing release or a new verified build revision; never overwrite an immutable tag. |
 | `NO_COMPATIBLE_STABLE_RELEASE` | No safe full v2+ tag matched | Check upstream releases; do not switch to legacy v1 automatically |
 | `UPSTREAM_LAYOUT_CHANGED` | Required API/UI/lock file moved | Review upstream changelog; do not bypass the preflight blindly |
 | `NODE_VERSION_UNTESTED` / `PYTHON_VERSION_UNTESTED` | Major toolchain moved beyond reviewed range | Review new requirements and test a new builder revision; no untested auto-adoption |

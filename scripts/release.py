@@ -99,7 +99,7 @@ def identity(root, tag, commit, release_url):
     meta = inspect_source(root)
     meta.update({'upstream_repo':REPOSITORY, 'upstream_version':tag,
                  'upstream_commit': commit, 'upstream_release_url':release_url,
-                 'builder_revision':'b1r1',
+                 'builder_revision':'b1r2',
                  'upstream_py_lock_sha256':sha256(Path(root)/'api/uv.lock'),
                  'upstream_npm_lock_sha256':sha256(Path(root)/'ui/package-lock.json'),
                  'installer_package_builder_commit':'9bf686ec29a46073ca3c27638e62862eb8cc9079',
