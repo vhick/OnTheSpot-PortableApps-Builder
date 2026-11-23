@@ -23,3 +23,12 @@
 - Windows compiler, actual v2.0.5 stage with checked-out full source, selected installer and runtime still not exercised locally; GitHub Actions must confirm.
 
 - b1r3 moves the pre-existing pinned Pillow setup to **before** regression tests (not installed twice). The eight added image-validation tests would otherwise fail at the first workflow stage on clean Windows runners.
+
+## b1r4 regression — Windows Actions log uploaded 23 November 2026
+
+- Observed `logs_122256383085.zip`: 30 tests ran; 4 failed on Windows with `WindowsPath('C:/Users/runneradmin/...') != WindowsPath('C:/Users/RUNNER~1/...')`, all from icon asset tests. The failures were in regression tests, before the resolver fetched upstream source or application binaries compiled.
+- Root cause: temporary paths use Windows 8.3 short names while `Path.resolve()` canonicalizes to long path names. This is a documented Python/Windows path issue.
+- Changed four tests to `chosen.samefile(expected)` for actual file identity; added one explicit aliased path regression; application icon selection code was not changed.
+- Run all 32 tests locally, compile Python sources, parse workflows, validate final archive and source checksums. Windows tests still pending.
+
+- Additional workflow consistency fix: published build releases now include the ZIP checksum manifest required by the existing installer-only source recovery; verified with regression coverage. No shared publisher logic was duplicated.

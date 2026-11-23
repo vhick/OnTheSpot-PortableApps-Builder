@@ -31,3 +31,7 @@ No program should automatically move, delete, or claim ownership of an existing 
 
 ### UPSTREAM_APP_ICON_NOT_FOUND (b1r3)
 Strict icon checks found no verified upstream logo. The staging workflow instead generates neutral, explicitly **unofficial** independent launcher artwork and records its provenance; it never substitutes unrelated provider logos or falsely labels the fallback as upstream artwork. Inspect the upstream tag's `assets` and `ui/public` directories; if the upstream developer moves/changes icon formats, review and update `choose_upstream_icon` in `scripts/stage.py`. No installer compilation or publishing occurs after this fail-closed error.
+
+### ICON TEST SHORT-PATH ALIAS (b1r4)
+
+If icon tests report `C:/Users/runneradmin/...` versus `C:/Users/RUNNER~1/...`, both may refer to the same file. Do not modify icon selection or suppress the tests. Ensure the b1r4 assertion uses `Path.samefile()` and rerun on `windows-2022`. The updated test checks underlying file identity and still rejects wrong/missing files.

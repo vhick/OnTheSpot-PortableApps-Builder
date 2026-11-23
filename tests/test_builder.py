@@ -93,6 +93,14 @@ class IntegrationSafetyTests(unittest.TestCase):
                     self.assertNotIn('steps.recover.outputs.zip-file',line)
                     self.assertTrue('build/' in line)
 
+    def test_publisher_includes_source_zip_checksum_for_installer_only_recovery(self):
+        """Release-based installer-only cannot work without published SHA256SUMS."""
+        workflows=Path(__file__).resolve().parents[1]/'.github/workflows'
+        source=(workflows/'build.yml').read_text(encoding='utf-8')
+        self.assertEqual(source.count('files: build/output/OnTheSpotPortable_*.zip;build/output/SHA256SUMS.txt;build/installers/*.paf.exe'),2)
+        repack=(workflows/'installer-only.yml').read_text(encoding='utf-8')
+        self.assertIn("--pattern 'SHA256SUMS.txt'",repack)
+
     def test_upstream_selected_release_checkout_must_match_server_sha(self):
         source=Path(release.__file__).read_text(encoding='utf-8')
         self.assertIn('UPSTREAM_CHECKOUT_COMMIT_MISMATCH',source)
@@ -147,7 +155,7 @@ class IconResolutionTests(unittest.TestCase):
             self.add_image(tmp,'assets/logos/old_logo.png')
             self.add_image(tmp,'ui/public/logo.png')
             chosen,metadata=stage.choose_upstream_icon(tmp)
-            self.assertEqual(chosen,p)
+            self.assertTrue(chosen.samefile(p), f"Expected selected icon {chosen} to be the same file as {p}")
             self.assertEqual(metadata['path'],'assets/logos/repository_logo.png')
 
     def test_missing_link_falls_back_to_versioned_app_branding(self):
@@ -157,7 +165,7 @@ class IconResolutionTests(unittest.TestCase):
             self.add_image(tmp,'assets/logos/bandcamp_logo.png')
             self.add_image(tmp,'assets/images/settings.png')
             chosen,_=stage.choose_upstream_icon(tmp)
-            self.assertEqual(chosen,p)
+            self.assertTrue(chosen.samefile(p), f"Expected selected icon {chosen} to be the same file as {p}")
 
     def test_valid_repo_readme_link_priority(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,7 +173,7 @@ class IconResolutionTests(unittest.TestCase):
             p=self.add_image(tmp,'assets/brand/official_v2.png')
             self.add_image(tmp,'assets/logos/logo.png')
             chosen,_=stage.choose_upstream_icon(tmp)
-            self.assertEqual(chosen,p)
+            self.assertTrue(chosen.samefile(p), f"Expected selected icon {chosen} to be the same file as {p}")
 
     def test_readme_traversal_and_remote_image_are_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -179,7 +187,21 @@ class IconResolutionTests(unittest.TestCase):
             self.add_image(tmp,'assets/logos/spotify_logo.png')
             p=self.add_image(tmp,'ui/public/onthespot_icon.png')
             chosen,_=stage.choose_upstream_icon(tmp)
-            self.assertEqual(chosen,p)
+            self.assertTrue(chosen.samefile(p), f"Expected selected icon {chosen} to be the same file as {p}")
+
+    def test_file_identity_uses_samefile_not_lexical_path_equality(self):
+        """A path containing '..' and its canonical path identify one icon.
+
+        Windows short 8.3 directory aliases and long names are another case
+        where printed names differ even though the underlying file is the same.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            expected=self.add_image(tmp,'assets/logos/repository_logo.png')
+            alias=expected.parent/'..'/expected.parent.name/expected.name
+            self.assertTrue(alias.samefile(expected))
+            chosen,_=stage.choose_upstream_icon(tmp)
+            self.assertTrue(chosen.samefile(alias))
+            self.assertTrue(chosen.is_file())
 
     def test_only_service_art_rejected(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -210,7 +232,7 @@ class ProductionReleaseProbeTests(unittest.TestCase):
         import probe_release
         self.probe_release=probe_release
         self.repo='vhick/OnTheSpot-PortableApps-Builder'
-        self.tag='portable-v2.0.5-b1r3-official'
+        self.tag='portable-v2.0.5-b1r4-official'
         self.token='fake-test-only-token'
 
     def test_absent_release_is_not_an_error(self):
