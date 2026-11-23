@@ -15,3 +15,11 @@
 **Not executed:** Windows C++ compilation, OnTheSpot locked Python dependency resolution on Windows, npm React build on Windows, actual FFmpeg/Deno acquisition, Python/Uvicorn server launch, real HTTPS service use, either installer engine, installation, upgrade, rollback or host-trace assessment. These are not represented as verified successes.
 
 **Known-good production releases:** none have been demonstrated for this application-specific builder as of this audit. GitHub Actions is configured to withhold artifacts and publishing on failed validation.
+
+## b1r3 local regression (23 November 2026)
+- Inspected `logs_122241030336.zip`: b1r2 release probe succeeded, upstream checkout v2.0.5 succeeded, source preflight succeeded, Node / uv / Pillow setup succeeded; `scripts/stage.py init` stopped at the old icon discovery rule.
+- Source of existing README repository-logo reference confirmed at https://raw.githubusercontent.com/ots-downloader/onthespot/v2.0.5/README.md. That reference does not prove a usable logo file exists in every release checkout.
+- New image-source tests cover explicitly labeled fallback artwork, multiple logos, nonexistent README target, alternate app asset, safe README hints, traversal rejection, service exclusion, corrupt images and absence of matching artwork.
+- Windows compiler, actual v2.0.5 stage with checked-out full source, selected installer and runtime still not exercised locally; GitHub Actions must confirm.
+
+- b1r3 moves the pre-existing pinned Pillow setup to **before** regression tests (not installed twice). The eight added image-validation tests would otherwise fail at the first workflow stage on clean Windows runners.

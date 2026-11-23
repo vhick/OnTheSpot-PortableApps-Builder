@@ -51,6 +51,8 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install pinned image validation library for regression tests and staging
+        run: python -m pip install --disable-pip-version-check Pillow==11.3.0
       - name: Run portable builder regression tests
         run: python -m unittest discover -s tests -v
       - name: Resolve latest compatible stable upstream release
@@ -68,7 +70,7 @@ jobs:
           ENGINE: ${{ inputs.installer-engine }}
           TAG: ${{ steps.release.outputs.upstream_tag }}
         run: |
-          $releaseTag="portable-$env:TAG-b1r2-$env:ENGINE"
+          $releaseTag="portable-$env:TAG-b1r3-$env:ENGINE"
           python scripts/probe_release.py --repository "$env:TARGET_REPOSITORY" --tag "$releaseTag" --mode skip
           if ($LASTEXITCODE -ne 0) { throw 'RELEASE_PROBE_FAILED: see RELEASE_EXISTENCE_CHECK_FAILED above' }
       - name: Checkout tagged upstream release (no upstream fork)
@@ -97,9 +99,6 @@ jobs:
         with:
           version: ${{ steps.inspect.outputs.uv_version }}
           enable-cache: true
-      - name: Install icon processing build dependency
-        if: ${{ steps.existing.outputs.skip != 'true' }}
-        run: python -m pip install --disable-pip-version-check Pillow==11.3.0
       - name: Create PortableApps metadata and source provenance
         if: ${{ steps.existing.outputs.skip != 'true' }}
         run: python scripts/stage.py init --source upstream --stage build/staging --identity build/identity.json
@@ -139,7 +138,7 @@ jobs:
           output-dir: build/installers
           engine: ${{ inputs.installer-engine }}
           running-exe: OnTheSpotPortable.exe
-          package-revision: b1r2
+          package-revision: b1r3
           timeout-seconds: '1200'
       - name: Validate selected installer identity and exact provenance
         if: ${{ steps.existing.outputs.skip != 'true' }}
@@ -173,8 +172,8 @@ jobs:
         uses: vhick/portable-release-publisher@cb64f86ac2d8c67506db5832de07f9ff58cbeaeb
         with:
           files: build/output/OnTheSpotPortable_*.zip;build/installers/*.paf.exe
-          tag: portable-${{ steps.zip.outputs.upstream-version }}-b1r2-${{ inputs.installer-engine }}
-          release-title: OnTheSpot ${{ steps.zip.outputs.upstream-version }} PortableApps b1r2 (${{ inputs.installer-engine }})
+          tag: portable-${{ steps.zip.outputs.upstream-version }}-b1r3-${{ inputs.installer-engine }}
+          release-title: OnTheSpot ${{ steps.zip.outputs.upstream-version }} PortableApps b1r3 (${{ inputs.installer-engine }})
           tag-prefix: portable-
           keep-releases: '3'
           prune: 'false'
@@ -184,8 +183,8 @@ jobs:
         uses: vhick/portable-release-publisher@cb64f86ac2d8c67506db5832de07f9ff58cbeaeb
         with:
           files: build/output/OnTheSpotPortable_*.zip;build/installers/*.paf.exe
-          tag: portable-${{ steps.zip.outputs.upstream-version }}-b1r2-${{ inputs.installer-engine }}
-          release-title: OnTheSpot ${{ steps.zip.outputs.upstream-version }} PortableApps b1r2 (${{ inputs.installer-engine }})
+          tag: portable-${{ steps.zip.outputs.upstream-version }}-b1r3-${{ inputs.installer-engine }}
+          release-title: OnTheSpot ${{ steps.zip.outputs.upstream-version }} PortableApps b1r3 (${{ inputs.installer-engine }})
           tag-prefix: portable-
           keep-releases: '3'
           prune: ${{ inputs.prune-managed-releases }}

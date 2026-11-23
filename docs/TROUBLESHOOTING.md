@@ -28,3 +28,6 @@
 **Diagnostics:** For startup problems inspect `Data/portable-startup-error.txt` and `Data/Config/logs/`. In GitHub Actions inspect the exact failed step and save its logs. Never publish, share, or paste unredacted `Data/Config/credentials.*`, OAuth tokens, private cookies, account details or full environment dumps.
 
 No program should automatically move, delete, or claim ownership of an existing unrelated host profile. The bootstrap uses only `Data` directory env overrides and selective settings relocation.
+
+### UPSTREAM_APP_ICON_NOT_FOUND (b1r3)
+Strict icon checks found no verified upstream logo. The staging workflow instead generates neutral, explicitly **unofficial** independent launcher artwork and records its provenance; it never substitutes unrelated provider logos or falsely labels the fallback as upstream artwork. Inspect the upstream tag's `assets` and `ui/public` directories; if the upstream developer moves/changes icon formats, review and update `choose_upstream_icon` in `scripts/stage.py`. No installer compilation or publishing occurs after this fail-closed error.

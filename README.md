@@ -1,8 +1,8 @@
-# OnTheSpot v2 PortableApps Builder Kit — b1r2
+# OnTheSpot v2 PortableApps Builder Kit — b1r3
 
 An **independent**, application-specific, source-based Windows PortableApps builder. It does not fork the upstream OnTheSpot project. GitHub Actions resolves a compatible stable v2+ release, builds its React frontend and Python backend with upstream locks, bundles a genuine Windows x64 Python runtime and necessary tools, compiles a native Win32 launcher, validates an independently generated PortableApps ZIP, and builds **one** installer via the shared Package Builder. Publishing is OFF unless explicitly selected.
 
-> **Validation status:** Repository audit and 22 isolated unit tests completed in the authoring environment. The full Windows GitHub Actions build, actual runtime smoke, selected-engine installer compilation, real installation and upgrade testing **have not been executed by the authoring environment**. Run a test workflow before enabling publishing. The kit is a testable implementation, **not a verified successful Windows release**.
+> **Validation status:** Repository audit and 30 isolated unit tests completed in the authoring environment. The full Windows GitHub Actions build, actual runtime smoke, selected-engine installer compilation, real installation and upgrade testing **have not been executed by the authoring environment**. Run a test workflow before enabling publishing. The kit is a testable implementation, **not a verified successful Windows release**.
 
 ## Important upstream change
 
@@ -10,11 +10,11 @@ Starting in OnTheSpot v2, the application uses **FastAPI + React**: it is a loca
 
 Upstream documentation: https://github.com/ots-downloader/onthespot/blob/v2.0.5/docs/INSTALLATION.md
 
-## Updating an existing b1r1 repository to b1r2
+## Updating an existing b1r1/b1r2 repository to b1r3
 
 1. Open the existing `OnTheSpot-PortableApps-Builder` repository in GitHub Desktop.
-2. Extract **all** files from this b1r2 ZIP over your existing working-tree files, preserving the `.git` directory and any local uncommitted work. The kit contains source only, no compiled application or user `Data` folder.
-3. Review the changed files in GitHub Desktop, commit `Fix first-time release detection and preserve installer-only build identity (b1r2)`, then push.
+2. Extract **all** files from this b1r3 ZIP over your existing working-tree files, preserving the `.git` directory and any local uncommitted work. The kit contains source only, no compiled application or user `Data` folder.
+3. Review the changed files in GitHub Desktop, commit `Fix OnTheSpot icon selection from upstream assets (b1r3)`, then push.
 4. Run **Build OnTheSpot PortableApps (Windows)** with **publish = false** first. Use the default `custom-nsis` engine for an initial test, or choose `official` explicitly to test that engine. Only publish after successful runtime and installation checks.
 5. No new independent repository is needed for this update. Keep previous validated releases and user `Data` unchanged.
 
@@ -23,13 +23,13 @@ Upstream documentation: https://github.com/ots-downloader/onthespot/blob/v2.0.5/
 1. In GitHub Desktop, select **File → New repository**. Name it `OnTheSpot-PortableApps-Builder` and choose your own local folder. Use an empty repository.
 2. **Choose Public or Private** when publishing the new repository on GitHub. Do not change the visibility after the fact unless you intend to. Public repositories produce public releases; private repositories produce private releases.
 3. Download and extract this **builder ZIP** into that new repository's local directory. The hidden `.github` folder must appear at repository root. Do not place a second wrapper folder around its contents.
-4. In GitHub Desktop, enter the commit summary `Add OnTheSpot v2 portable source builder b1r2` and commit all source files. Select **Publish repository** and preserve your desired visibility.
+4. In GitHub Desktop, enter the commit summary `Fix upstream logo discovery in OnTheSpot builder b1r3` and commit all source files. Select **Publish repository** and preserve your desired visibility.
 5. On GitHub.com, open **Actions → Build OnTheSpot PortableApps (Windows)** → **Run workflow**.
 6. Leave **upstream-version** empty for latest suitable stable v2+ release; leave **installer-engine** as **custom-nsis** to begin; keep **publish = false**. Click **Run workflow**.
 7. When the job is complete and **green**, open its run summary. Under **Artifacts**, download `OnTheSpotPortable-test-<run ID>`; unzip it. This contains an independent PortableApps ZIP, the selected `.paf.exe` installer, checksums and provenance notes.
 8. If the default engine tests successfully, optionally run another **test build** choosing **official**. It compiles actual PortableApps.com Installer **3.9.24** source through the shared Package Builder, not an installer-download wizard. Do not assume success from the default engine alone.
 9. Only after checking runtime and upgrades, rerun with **publish = true**. Validated output goes to **your new repository → Releases**. Test artifacts are **not** uploaded when production publishing is enabled.
-10. To extract without installation, unpack the **inner** `OnTheSpotPortable_vX.Y.Z_b1r2.zip` to a `PortableApps` folder and start `OnTheSpotPortable/OnTheSpotPortable.exe`. Or use the selected `.paf.exe` installer. The launcher requires no administrator permissions for normal usage.
+10. To extract without installation, unpack the **inner** `OnTheSpotPortable_vX.Y.Z_b1r3.zip` to a `PortableApps` folder and start `OnTheSpotPortable/OnTheSpotPortable.exe`. Or use the selected `.paf.exe` installer. The launcher requires no administrator permissions for normal usage.
 11. On upgrade, stop the program, **back up the entire `Data` directory**, then upgrade/replace **App**, root launcher, metadata and **Other**. Never overwrite or delete `Data`, including empty folders and `Data/.managed-paths.json`.
 12. To rebuild **only the installer**, choose **Actions → Rebuild OnTheSpot Installer Only (Windows)**. Provide **one**: an existing production `source-release-tag` **or** an existing successful test run's numeric `source-test-run-id`. Choose desired engine; leave publish false for first attempt. The existing ZIP's SHA-256 and build identity are verified. The application binaries are **not** rebuilt.
 
@@ -96,3 +96,11 @@ Shared Publisher: https://github.com/vhick/portable-release-publisher (verified 
 OnTheSpot uses GPL-2.0; source: https://github.com/ots-downloader/onthespot/tree/v2.0.5 . The kit's independent C++ launcher is MIT; a compiled distribution must also satisfy licenses for FFmpeg, Python, Deno, uv-resolved Python dependencies, and UI npm dependencies. For redistribution, ensure you provide appropriate license texts, notices, and **corresponding source** where required (including GPL FFmpeg). Upstream links alone may not satisfy your legal obligations.
 
 See `docs/SOURCE-AUDIT.md`, `docs/LOCAL-VALIDATION.md`, `docs/COMPATIBILITY-BASELINE.json`, `docs/TROUBLESHOOTING.md` and `docs/WINDOWS-ACCEPTANCE.md` for evidence, limitations and acceptance procedures.
+
+## b1r3 GitHub Actions icon discovery fix (23 November 2026)
+
+- Input log `logs_122241030336.zip` shows all 22 b1r2 tests passing, upstream v2.0.5 resolution and all steps through Pillow installation succeeding. The next stage failed with `UPSTREAM_APP_ICON_CHANGED` because the old code allowed only a single matching `logo*.png` when the expected path was missing.
+- Replaced the hardcoded single-path rule with a deterministic, read-only source-branding resolver: respects the upstream README repository logo when its local file exists; searches application-specific `assets`, `ui/public` and legacy icon paths; filters screenshots, service providers and unrelated files; validates actual image format, size, and sane aspect ratio before use.
+- The exact selected upstream icon relative path and SHA-256 are recorded in `Other/Source/BUILD-IDENTITY.json`. No icon assets are downloaded separately from the selected upstream Git commit, and third-party brand logos are not silently substituted. If no trustworthy usable asset exists, the builder uses clearly labeled original independent launcher artwork (not a falsely attributed upstream icon), emits `UNOFFICIAL_ICON_FALLBACK`, and records that provenance. Strict icon checks reject such releases when requested by future maintainers.
+- The patch keeps the launcher compiler and shared packaging/publishing action versions unchanged. An `official` build does not silently switch to `custom-nsis`.
+- **Validation:** 30 local isolated tests, Python syntax checks and workflow YAML parsing are required. Actual Windows application launch, installation and upgrade must still be confirmed by GitHub Actions/manual acceptance.
